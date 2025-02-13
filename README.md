@@ -93,6 +93,12 @@ Deepest Nesting Locations:
 └──────┴───────┴────────────────┘
 ```
 
+## Actual output results
+![Screenshot 2025-02-13 at 2 14 33 PM](https://github.com/user-attachments/assets/f6c33e7a-26bd-444e-85cf-efba5ebc7674)
+![Screenshot 2025-02-13 at 2 14 55 PM](https://github.com/user-attachments/assets/6afbc3d9-83ea-48bb-b37c-d41ee70ca4ec)
+![Screenshot 2025-02-13 at 2 15 12 PM](https://github.com/user-attachments/assets/291b05ef-04f6-42c4-a0c7-169d2b0023e9)
+
+
 ## Installation
 
 ```bash
