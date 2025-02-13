@@ -1,0 +1,10 @@
+{
+  "devDependencies": {
+    "@types/node": "^22.13.2"
+  },
+  "dependencies": {
+    "asciichart": "^1.5.25",
+    "chalk": "4",
+    "cli-table3": "^0.6.5"
+  }
+}
