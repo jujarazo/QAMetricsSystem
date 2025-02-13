@@ -2,9 +2,21 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 import Table from 'cli-table3';
 
+interface ComplexityLocation {
+    line: number;
+    code: string;
+    depth?: number;
+}
+
 interface CodeMetrics {
-    cyclomaticComplexity: number;
-    maxNestingDepth: number;
+    cyclomaticComplexity: {
+        total: number;
+        locations: ComplexityLocation[];
+    };
+    maxNestingDepth: {
+        max: number;
+        locations: ComplexityLocation[];
+    };
     duplicatedCodeBlocks: Array<{
         code: string;
         occurrences: number;
@@ -29,45 +41,79 @@ export function analyzeCode(sourceCode: string): CodeMetrics {
     return metrics;
 }
 
-function calculateCyclomaticComplexity(sourceCode: string): number {
-    let complexity = 1; // Base complexity
+function calculateCyclomaticComplexity(sourceCode: string): { total: number; locations: ComplexityLocation[] } {
+    const locations: ComplexityLocation[] = [];
+    const lines = sourceCode.split('\n');
     
-    // Count decision points
-    const decisionPatterns = [
-        /\bif\b/g,
-        /\belse\s+if\b/g,
-        /\bwhile\b/g,
-        /\bfor\b/g,
-        /\bcase\b/g,
-        /\bcatch\b/g,
-        /\b&&\b/g,
-        /\b\|\|\b/g,
-        /\?/g // Ternary operators
-    ];
+    // Count the number of independent paths
+    let complexity = 1; // Base complexity (one path)
     
-    decisionPatterns.forEach(pattern => {
-        const matches = sourceCode.match(pattern);
-        if (matches) {
-            complexity += matches.length;
+    lines.forEach((line, index) => {
+        // Count control flow statements that create new paths
+        const controlFlowMatches = line.match(/\b(if|while|for|case|catch)\b|&&|\|\||\?/g);
+        if (controlFlowMatches) {
+            complexity += controlFlowMatches.length;
+            locations.push({
+                line: index + 1,
+                code: line.trim()
+            });
+        }
+        
+        // Count each else as a new path
+        if (/\belse\b/.test(line) && !/\belse\s+if\b/.test(line)) {
+            complexity++;
+            locations.push({
+                line: index + 1,
+                code: line.trim()
+            });
         }
     });
     
-    return complexity;
+    return { total: complexity, locations };
 }
 
-function calculateMaxNestingDepth(lines: string[]): number {
+function calculateMaxNestingDepth(lines: string[]): { max: number; locations: ComplexityLocation[] } {
     let maxDepth = 0;
     let currentDepth = 0;
+    const locations: ComplexityLocation[] = [];
+    const stack: { line: number; code: string }[] = [];
     
-    for (const line of lines) {
-        const openBraces = (line.match(/{/g) || []).length;
-        const closeBraces = (line.match(/}/g) || []).length;
+    lines.forEach((line, index) => {
+        const trimmedLine = line.trim();
         
-        currentDepth += openBraces - closeBraces;
-        maxDepth = Math.max(maxDepth, currentDepth);
-    }
+        // Check for control structures that can be nested
+        if (/\b(if|for|while|switch|do)\b.*{/.test(trimmedLine) || 
+            /\belse\b.*{/.test(trimmedLine)) {
+            currentDepth++;
+            stack.push({ line: index + 1, code: trimmedLine });
+            
+            if (currentDepth > maxDepth) {
+                maxDepth = currentDepth;
+                // Clear previous max depth locations if we found a deeper nesting
+                locations.length = 0;
+                // Add the entire stack to show the nesting hierarchy
+                locations.push(...stack.map((item, depth) => ({
+                    line: item.line,
+                    code: item.code,
+                    depth: depth + 1
+                })));
+            }
+        }
+        
+        // Count closing braces to decrease depth
+        const closeBraces = (trimmedLine.match(/}/g) || []).length;
+        for (let i = 0; i < closeBraces; i++) {
+            currentDepth = Math.max(0, currentDepth - 1);
+            if (stack.length > 0) {
+                stack.pop();
+            }
+        }
+    });
     
-    return maxDepth;
+    return {
+        max: maxDepth,
+        locations: locations
+    };
 }
 
 function findDuplicatedCode(
@@ -155,9 +201,49 @@ function analyzeDocumentation(lines: string[]): {
 function displayMetrics(metrics: CodeMetrics) {
     console.log('\n' + chalk.blue.bold('=== Code Analysis Results ===') + '\n');
 
-    // Complexity metrics
-    console.log(chalk.yellow('Cyclomatic Complexity:'), metrics.cyclomaticComplexity);
-    console.log(chalk.yellow('Maximum Nesting Depth:'), metrics.maxNestingDepth);
+    // Cyclomatic Complexity
+    console.log(chalk.yellow.bold('Cyclomatic Complexity:'), metrics.cyclomaticComplexity.total);
+    if (metrics.cyclomaticComplexity.locations.length > 0) {
+        const complexityTable = new Table({
+            head: [
+                chalk.green('Line'),
+                chalk.green('Code')
+            ],
+            colWidths: [8, 72]
+        });
+
+        metrics.cyclomaticComplexity.locations.forEach(loc => {
+            complexityTable.push([
+                loc.line,
+                loc.code
+            ]);
+        });
+        console.log(chalk.yellow('\nComplexity Points:'));
+        console.log(complexityTable.toString());
+    }
+
+    // Maximum Nesting Depth
+    console.log(chalk.yellow.bold('\nMaximum Nesting Depth:'), metrics.maxNestingDepth.max);
+    if (metrics.maxNestingDepth.locations.length > 0) {
+        const depthTable = new Table({
+            head: [
+                chalk.green('Line'),
+                chalk.green('Depth'),
+                chalk.green('Code')
+            ],
+            colWidths: [8, 8, 64]
+        });
+
+        metrics.maxNestingDepth.locations.forEach(loc => {
+            depthTable.push([
+                loc.line,
+                loc.depth,
+                loc.code
+            ]);
+        });
+        console.log(chalk.yellow('\nDeepest Nesting Locations:'));
+        console.log(depthTable.toString());
+    }
 
     // Documentation coverage
     const coverageTable = new Table({

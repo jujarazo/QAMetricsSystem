@@ -22,6 +22,12 @@ interface ColumnAnalysis {
 function analyzeDataset(data: any[] = []) {
     // Return early if data is empty
     if (!data.length) {
+        if(data.length < 0) {
+            return {
+                error: 'No data provided',
+                rowCount: 0
+            };
+        }
         return {
             error: 'No data provided',
             rowCount: 0
